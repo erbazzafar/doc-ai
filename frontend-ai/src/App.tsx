@@ -1,191 +1,240 @@
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Send, Upload } from "lucide-react"; 
-
+import {
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+  Send,
+  Upload,
+} from "lucide-react";
 import axios from "axios";
-import "./App.css";
 import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
+import "./App.css";
+
+interface ChatEntry {
+  question: string;
+  answer: string;
+}
 
 function App() {
   const [file, setFile] = useState<File | null>(null);
-  const [messages, setMessages] = useState<string>("");
+  const [messageInput, setMessageInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
-  const [chatHistory, setChatHistory] = useState<{ question: string; answer: string }[]>([]);
+  const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
   const [sliderIndex, setSliderIndex] = useState<number>(0);
+  const [summary, setSummary] = useState<string>("");
 
-  if (
-    file &&
-    (file.size > 2 * 1024 * 1024 ||
-      (file.type !== "application/pdf" && file.type !== "text/plain"))
-  ) {
-    toast.error("File not supported. Upload a PDF or TXT file under 2MB.");
-    setFile(null);
-    return null;
-  }
-
+  /** ---------------------------
+   * File Upload + Summary
+   ----------------------------- */
   useEffect(() => {
-    const uploadFile = async () => {
-    if (!file) {
-      toast.error("Please select a file to upload")
-      return
-    } 
+    const uploadFileAndGetSummary = async () => {
+      if (!file) return;
 
-    const formData = new FormData()
-    formData.append("file", file)
-
-    try {
-      const sendFile = await axios.post(
-        'http://localhost:8090/file/upload',
-        formData,
-        {
-          headers: {
-            'Content-Type': 'multipart/form-data'
-          }
-        } 
-      )
-      if (sendFile.status !==200) {
-        toast.error("File upload failed")
-        return
-      }
-
-      toast.success("File Uploaded Successfully")
-
-    } catch (error) {
-      toast.error("File upload failed")
-    }
-  }
-  uploadFile()
-  }, [file])
-
-  const sendMessageToAI = async (message: string) => {
-    setLoading(true);
-    try {
-      if (!message.trim()) {
-        toast.info("Please enter a message");
+      if (
+        file.size > 2 * 1024 * 1024 ||
+        (file.type !== "application/pdf" && file.type !== "text/plain")
+      ) {
+        toast.error("File not supported. Upload a PDF or TXT file under 2MB.");
+        setFile(null);
         return;
       }
 
+      const formData = new FormData();
+      formData.append("file", file);
+
+      try {
+        const uploadRes = await axios.post(
+          "http://localhost:8090/file/upload",
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+
+        if (uploadRes.status !== 200) throw new Error("Upload failed");
+        toast.success("File uploaded successfully!");
+        setChatHistory([])
+
+        const summaryRes = await axios.post(
+          "http://localhost:8090/file/summary",
+          formData,
+          { headers: { "Content-Type": "multipart/form-data" } }
+        );
+
+        if (summaryRes.status !== 200) throw new Error("Summary failed");
+        setSummary(summaryRes.data?.data || "No summary available.");
+      } catch (err) {
+        console.error(err);
+        toast.error("File upload or summary failed.");
+        setFile(null);
+      }
+    };
+
+    uploadFileAndGetSummary();
+  }, [file]);
+
+  /** ---------------------------
+   * Send message to AI
+   ----------------------------- */
+  const sendMessageToAI = async () => {
+    if (!messageInput.trim()) {
+      toast.info("Please enter a message");
+      return;
+    }
+
+    setLoading(true);
+    try {
       const response = await axios.post(
         "http://localhost:8090/question/ask",
-        {
-          message,
-        },
-        {
-          headers: { "Content-Type": "application/json" },
-        }
+        { message: messageInput },
+        { headers: { "Content-Type": "application/json" } }
       );
 
-      if (response.status !== 200) throw new Error("Error sending message");
-      console.log ("----response---- ", response)
-      const data = response.data;
-      const answer = data.data
-      setChatHistory((prev) => [...prev, { question: message, answer }]);
-      setMessages("");
+      if (response.status !== 200) throw new Error();
+
+      const answer = response.data?.data || "No answer received.";
+      setChatHistory((prev) => [...prev, { question: messageInput, answer }]);
+      setMessageInput("");
+      setSliderIndex(chatHistory.length);
     } catch (error) {
       console.error(error);
-      alert("Something went wrong!");
-
+      toast.error("Something went wrong while asking the AI.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePrev = () => {
-    setSliderIndex((prev) => Math.max(0, prev - 1));
-  };
+  /** ---------------------------
+   * Slider Controls
+   ----------------------------- */
+  const handlePrev = () => setSliderIndex((prev) => Math.max(0, prev - 1));
+  const handleNext = () =>
+    setSliderIndex((prev) => Math.min(chatHistory.length - 1, prev + 1));
 
-  const handleNext = () => {
-    setSliderIndex((prev) => Math.min(chatHistory.length - 2, prev + 1));
-  };
-
-
+  /** ---------------------------
+   * UI
+   ----------------------------- */
   return (
-    <div className="App flex flex-col items-center justify-center min-h-screen bg-gradient-to-r from-indigo-100 via-white to-blue-100 p-6">
-      {/* File Upload Section */}
-      <div className="bg-white p-6 rounded-2xl shadow-lg w-full max-w-lg text-center border border-gray-200">
-        <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-6 cursor-pointer hover:border-blue-400 transition">
-          <Upload className="w-10 h-10 text-blue-500 mb-2" />
-          <span className="text-gray-600 font-medium">
-            {file ? file.name : "Click or drag a file to upload"}
-          </span>
-          <input
-            type="file"
-            className="hidden"
-            onChange={(e) => {
-              if (e.target.files?.length) {
-                setFile(e.target.files[0]);
-              }
-            }}
-          />
-        </label>
+    <div className="App  min-h-screen bg-gradient-to-r from-indigo-200 via-hazelblue to-blue-300 p-8">
+      <div className="bg-gradient-to-r from-indigo-300 via-purple-200 to-blue-300 p-3 rounded-3xl shadow-lg text-center space-y-4">
+        <h2 className="text-3xl font-bold text-gray-800">AI Document Assistant</h2>
+        <h3 className="text-xl text-gray-700 max-w-xl mx-auto">
+          Upload your document and get instant AI-powered insights
+        </h3>
       </div>
+      <div className="mt-15 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Left Column */}
+        <div className="space-y-6">
+          {/* Upload Card */}
+          <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">
+              Upload a Document
+            </h2>
+            <label className="flex flex-col items-center justify-center border-2 border-dashed border-gray-300 rounded-xl p-8 cursor-pointer hover:border-blue-400 transition">
+              <Upload className="w-12 h-12 text-blue-500 mb-3" />
+              <span className="text-gray-600 font-medium text-sm">
+                {file
+                  ? `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)`
+                  : "Click or drag a file to upload"}
+              </span>
+              <input
+                type="file"
+                className="hidden"
+                onChange={(e) => {
+                  if (e.target.files?.length) setFile(e.target.files[0]);
+                }}
+              />
+            </label>
+          </div>
 
-      {/* Chat Section */}
-      <div className="bg-white p-6 rounded-2xl shadow-lg mt-6 w-full max-w-lg flex flex-col">
-        <h2 className="text-xl font-semibold text-gray-700 mb-3">
-          Document Q&A
-        </h2>
-        <div className="flex-1 h-80 overflow-y-auto border border-gray-200 rounded-lg p-4 space-y-3">
-          {!chatHistory && (
-            <p className="text-gray-400 text-center">
-              Start asking questions about your document...
-            </p>
-          )}
-         {chatHistory.map((chat, idx) => (
-            <div key={idx} className="mb-4">
-              {/* User question bubble */}
-              <div className="flex justify-end">
-                <div className="bg-blue-500 text-white rounded-lg px-4 py-2 max-w-xs text-right inline-block">
-                  {chat.question}
-                </div>
-              </div>
-              {/* AI answer bubble */}
-              <div className="flex justify-start mt-1">
-                <div className="bg-gray-200 text-gray-800 rounded-lg px-4 py-2 max-w-xs inline-block">
-                  {chat.answer}
-                </div>
-              </div>
+          {/* Summary Card */}
+          <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-700 mb-4">
+              Document Summary
+            </h2>
+            <div className="bg-gray-50 p-5 rounded-lg text-gray-700 text-sm h-48 overflow-y-auto leading-relaxed">
+              {summary || "No document summary available."}
             </div>
-          ))}
+          </div>
         </div>
-        {chatHistory.length > 2 && (
-          <div className="flex justify-center items-center gap-4 mt-2">
+
+        {/* Right Column */}
+        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 flex flex-col">
+          <h2 className="text-xl font-semibold text-gray-700 mb-6">
+            Document Q&A
+          </h2>
+
+          {/* Chat Slider */}
+          <div className="relative flex-1 border border-gray-200 rounded-lg overflow-hidden mb-6">
+            {chatHistory.length === 0 ? (
+              <p className="text-gray-400 text-center mt-20">
+                Start asking questions about your document...
+              </p>
+            ) : (
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={sliderIndex}
+                  initial={{ x: 200, opacity: 0 }}
+                  animate={{ x: 0, opacity: 1 }}
+                  exit={{ x: -200, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className="p-6 w-full h-full flex flex-col justify-center space-y-4"
+                >
+                  {/* Question */}
+                  <div className="flex justify-end">
+                    <div className="bg-blue-500 text-white rounded-lg px-5 py-3 max-w-xs text-right shadow-md">
+                      {chatHistory[sliderIndex].question}
+                    </div>
+                  </div>
+
+                  {/* Answer */}
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 text-gray-800 rounded-lg px-5 py-3 max-w-xs shadow-md">
+                      {chatHistory[sliderIndex].answer}
+                    </div>
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+            )}
+
+            {/* Arrows */}
+            {chatHistory.length > 1 && (
+              <>
+                <button
+                  onClick={handlePrev}
+                  disabled={sliderIndex === 0}
+                  className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white shadow-lg hover:bg-blue-50 disabled:opacity-40"
+                >
+                  <ChevronLeft />
+                </button>
+                <button
+                  onClick={handleNext}
+                  disabled={sliderIndex === chatHistory.length - 1}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white shadow-lg hover:bg-blue-50 disabled:opacity-40"
+                >
+                  <ChevronRight />
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Input */}
+          <div className="flex">
+            <input
+              type="text"
+              value={messageInput}
+              onChange={(e) => setMessageInput(e.target.value)}
+              placeholder="Ask a question..."
+              className="border border-gray-300 rounded-xl px-4 py-3 w-full focus:ring-2 focus:ring-blue-400 outline-none"
+            />
             <button
-              onClick={handlePrev}
-              disabled={sliderIndex === 0}
-              className={`p-2 rounded-full ${sliderIndex === 0 ? "bg-gray-200 text-gray-400" : "bg-blue-500 text-white"}`}
+              onClick={sendMessageToAI}
+              disabled={loading}
+              className="ml-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-6 py-3 flex items-center gap-2 transition shadow-md"
             >
-              <ChevronLeft />
-            </button>
-            <span className="text-gray-600 text-sm">
-              {sliderIndex + 1} - {Math.min(sliderIndex + 2, chatHistory.length)} / {chatHistory.length}
-            </span>
-            <button
-              onClick={handleNext}
-              disabled={sliderIndex >= chatHistory.length - 2}
-              className={`p-2 rounded-full ${sliderIndex >= chatHistory.length - 2 ? "bg-gray-200 text-gray-400" : "bg-blue-500 text-white"}`}
-            >
-              <ChevronRight />
+              {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Send />}
+              Send
             </button>
           </div>
-        )}
-
-        {/* Input Box */}
-        <div className="flex mt-4">
-          <input
-            type="text"
-            value={messages}
-            onChange={(e) => setMessages(e.target.value)}
-            placeholder="Ask a question..."
-            className="border border-gray-300 rounded-xl px-4 py-2 w-full focus:ring-2 focus:ring-blue-400 outline-none"
-          />
-          <button
-            onClick={() => sendMessageToAI(messages)}
-            disabled={loading}
-            className="ml-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-4 py-2 flex items-center gap-1 transition"
-          >
-            {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Send />}
-            Send
-          </button>
         </div>
       </div>
     </div>
