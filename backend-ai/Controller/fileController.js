@@ -2,6 +2,7 @@ require("dotenv").config();
 const fs = require("fs");
 const pdfParse = require("pdf-parse");
 const Groq = require("groq-sdk");
+const { fileModel } = require("../Models/fileModel");
 
 
 const groq = new Groq({
@@ -50,7 +51,6 @@ const getExtractedText = () => lastExtractedText;
 const fileSummary = async (req, res) => {
     try {
         const file = req.file;
-
         if (!file) {
             return res.status(400).json({ status: "fail", message: "No file uploaded" });
         }
@@ -91,6 +91,11 @@ const fileSummary = async (req, res) => {
         if (!summary) {
             return res.status(500).json({ status: "fail", message: "No summary generated" });
         }
+
+        await fileModel.create({
+            file: file.path,
+            summary: summary
+        })
 
         return res.status(200).json({
             status: "ok",

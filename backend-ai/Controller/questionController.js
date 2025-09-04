@@ -2,6 +2,8 @@ require("dotenv").config();
 const stringSimilarity = require("string-similarity");
 const Groq = require("groq-sdk");
 const { getExtractedText } = require("./fileController");
+const { questionModel } = require("../Models/questionModel");
+const { answerModel } = require("../Models/answerModel");
 
 
 
@@ -67,7 +69,16 @@ const sendMessageToAi = async (req, res) => {
             max_completion_tokens: 512,
         });
 
+        const question = await questionModel.create({
+            title: message
+        })
+
         const answer = chatCompletion.choices[0].message.content;
+
+        await answerModel.create({
+            questionId: question._id,
+            answer: answer
+        })
 
         if (!answer) {
             return res.status(500).json({ status: 'fail', message: 'No answer generated' });
@@ -76,6 +87,7 @@ const sendMessageToAi = async (req, res) => {
         console.log("answer: ", answer)
         return res.status(200).json({ status: 'ok', message: 'success', data: answer })
     } catch (error) {
+        console.error("Error in sendMessageToAi:", error);
         return res.status(500).json({ status: 'fail', message: 'Server Error' });
     }
 }

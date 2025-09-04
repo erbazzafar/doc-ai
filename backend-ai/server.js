@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const questionRouter = require("./Router/questionRouter");
 const fileRouter = require("./Router/fileRouter");
+const dbConnect = require("./dbConnect/connection");
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+dbConnect()
 
 // Test route
 app.get("/", (req, res) => {

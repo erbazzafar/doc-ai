@@ -1,14 +1,12 @@
 import { useEffect, useState } from "react";
 import {
-  ChevronLeft,
-  ChevronRight,
   Loader2,
   Send,
   Upload,
 } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion} from "framer-motion";
 import "./App.css";
 
 interface ChatEntry {
@@ -21,56 +19,53 @@ function App() {
   const [messageInput, setMessageInput] = useState<string>("");
   const [loading, setLoading] = useState<boolean>(false);
   const [chatHistory, setChatHistory] = useState<ChatEntry[]>([]);
-  const [sliderIndex, setSliderIndex] = useState<number>(0);
   const [summary, setSummary] = useState<string>("");
 
   /** ---------------------------
    * File Upload + Summary
    ----------------------------- */
   useEffect(() => {
-    const uploadFileAndGetSummary = async () => {
-      if (!file) return;
+  if (!file) return;
 
-      if (
-        file.size > 2 * 1024 * 1024 ||
-        (file.type !== "application/pdf" && file.type !== "text/plain")
-      ) {
-        alert("File not supported. Upload a PDF or TXT file under 2MB.");
-        setFile(null);
-        return;
-      }
+  // Reset chat history whenever a new file is selected
+  setChatHistory([]);
+  setSummary(""); // clear previous summary if you want
 
-      const formData = new FormData();
-      formData.append("file", file);
+  const uploadFileAndGetSummary = async () => {
+    setLoading(true);
 
-      try {
-        const uploadRes = await axios.post(
-          "http://localhost:8090/file/upload",
-          formData,
-          { headers: { "Content-Type": "multipart/form-data" } }
-        );
+    const formData = new FormData();
+    formData.append("file", file);
 
-        if (uploadRes.status !== 200) throw new Error("Upload failed");
-        toast.success("File uploaded successfully!");
-        setChatHistory([])
+    try {
+      const uploadRes = await axios.post(
+        "http://localhost:8090/file/upload",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      if (uploadRes.status !== 200) throw new Error("Upload failed");
 
-        const summaryRes = await axios.post(
-          "http://localhost:8090/file/summary",
-          formData,
-          { headers: { "Content-Type": "multipart/form-data" } }
-        );
+      toast.success("File uploaded successfully!");
 
-        if (summaryRes.status !== 200) throw new Error("Summary failed");
-        setSummary(summaryRes.data?.data || "No summary available.");
-      } catch (err) {
-        console.error(err);
-        toast.error("File upload or summary failed.");
-        setFile(null);
-      }
-    };
+      const summaryRes = await axios.post(
+        "http://localhost:8090/file/summary",
+        formData,
+        { headers: { "Content-Type": "multipart/form-data" } }
+      );
+      if (summaryRes.status !== 200) throw new Error("Summary failed");
 
-    uploadFileAndGetSummary();
-  }, [file]);
+      setSummary(summaryRes.data?.data || "No summary available.");
+    } catch (err) {
+      console.error(err);
+      toast.error("File upload or summary failed.");
+      setFile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  uploadFileAndGetSummary();
+}, [file]);
 
   /** ---------------------------
    * Send message to AI
@@ -94,7 +89,6 @@ function App() {
       const answer = response.data?.data || "No answer received.";
       setChatHistory((prev) => [...prev, { question: messageInput, answer }]);
       setMessageInput("");
-      setSliderIndex(chatHistory.length);
     } catch (error) {
       console.error(error);
       toast.error("Something went wrong while asking the AI.");
@@ -102,13 +96,6 @@ function App() {
       setLoading(false);
     }
   };
-
-  /** ---------------------------
-   * Slider Controls
-   ----------------------------- */
-  const handlePrev = () => setSliderIndex((prev) => Math.max(0, prev - 1));
-  const handleNext = () =>
-    setSliderIndex((prev) => Math.min(chatHistory.length - 1, prev + 1));
 
   /** ---------------------------
    * UI
@@ -151,91 +138,77 @@ function App() {
             <h2 className="text-lg font-semibold text-gray-700 mb-4">
               Document Summary
             </h2>
-            <div className="bg-gray-50 p-5 rounded-lg text-gray-700 text-sm h-48 overflow-y-auto leading-relaxed">
-              {summary || "No document summary available."}
+            <div className="bg-gray-50 p-5 rounded-lg text-gray-700 text-sm h-48 overflow-y-auto leading-relaxed relative">
+              {loading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-50 bg-opacity-50">
+                  <Loader2 className="animate-spin w-8 h-8 text-blue-500" />
+                </div>
+              ) : (
+                <div>{summary || "No summary available."}</div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Right Column */}
-        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 flex flex-col">
-          <h2 className="text-xl font-semibold text-gray-700 mb-6">
-            Document Q&A
-          </h2>
+        <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200 flex flex-col h-full">
+  <h2 className="text-xl font-semibold text-gray-700 mb-6">
+    Document Q&A
+  </h2>
 
-          {/* Chat Slider */}
-          <div className="relative flex-1 border border-gray-200 rounded-lg overflow-hidden mb-6">
-            {chatHistory.length === 0 ? (
-              <p className="text-gray-400 text-center mt-20">
-                Start asking questions about your document...
-              </p>
-            ) : (
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={sliderIndex}
-                  initial={{ x: 200, opacity: 0 }}
-                  animate={{ x: 0, opacity: 1 }}
-                  exit={{ x: -200, opacity: 0 }}
-                  transition={{ duration: 0.3 }}
-                  className="p-6 w-full h-full flex flex-col justify-center space-y-4"
-                >
-                  {/* Question */}
-                  <div className="flex justify-end">
-                    <div className="bg-blue-500 text-white rounded-lg px-5 py-3 max-w-xs text-right shadow-md">
-                      {chatHistory[sliderIndex].question}
-                    </div>
-                  </div>
-
-                  {/* Answer */}
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 text-gray-800 rounded-lg px-5 py-3 max-w-xs shadow-md">
-                      {chatHistory[sliderIndex].answer}
-                    </div>
-                  </div>
-                </motion.div>
-              </AnimatePresence>
-            )}
-
-            {/* Arrows */}
-            {chatHistory.length > 1 && (
-              <>
-                <button
-                  onClick={handlePrev}
-                  disabled={sliderIndex === 0}
-                  className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white shadow-lg hover:bg-blue-50 disabled:opacity-40"
-                >
-                  <ChevronLeft />
-                </button>
-                <button
-                  onClick={handleNext}
-                  disabled={sliderIndex === chatHistory.length - 1}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white shadow-lg hover:bg-blue-50 disabled:opacity-40"
-                >
-                  <ChevronRight />
-                </button>
-              </>
-            )}
+  {/* Chat Slider */}
+  <div className="relative flex-1 border border-gray-200 rounded-lg overflow-y-auto p-4 space-y-4">
+    {chatHistory.length === 0 ? (
+      <p className="text-gray-400 text-center mt-20">
+        Start asking questions about your document...
+      </p>
+    ) : (
+      chatHistory.map((chat, index) => (
+        <motion.div
+          key={index}
+          initial={{ opacity: 0, y: 50 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -50 }}
+          transition={{ duration: 0.3 }}
+          className="flex flex-col space-y-2"
+        >
+          {/* Question */}
+          <div className="flex justify-end">
+            <div className="bg-blue-500 text-white rounded-lg px-5 py-3 max-w-xs text-right shadow-md">
+              {chat.question}
+            </div>
           </div>
 
-          {/* Input */}
-          <div className="flex">
-            <input
-              type="text"
-              value={messageInput}
-              onChange={(e) => setMessageInput(e.target.value)}
-              placeholder="Ask a question..."
-              className="border border-gray-300 rounded-xl px-4 py-3 w-full focus:ring-2 focus:ring-blue-400 outline-none"
-            />
-            <button
-              onClick={sendMessageToAI}
-              disabled={loading}
-              className="ml-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-6 py-3 flex items-center gap-2 transition shadow-md"
-            >
-              {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Send />}
-              Send
-            </button>
+          {/* Answer */}
+          <div className="flex justify-start">
+            <div className="bg-gray-100 text-gray-800 rounded-lg px-5 py-3 max-w-xs shadow-md">
+              {chat.answer}
+            </div>
           </div>
-        </div>
+        </motion.div>
+      ))
+    )}
+  </div>
+
+  {/* Input */}
+  <div className="flex mt-auto">
+    <input
+      type="text"
+      value={messageInput}
+      onChange={(e) => setMessageInput(e.target.value)}
+      placeholder="Ask a question..."
+      className="border border-gray-300 rounded-xl px-4 py-3 w-full focus:ring-2 focus:ring-blue-400 outline-none"
+    />
+    <button
+      onClick={sendMessageToAI}
+      disabled={loading}
+      className="ml-3 bg-blue-500 hover:bg-blue-600 text-white rounded-xl px-6 py-3 flex items-center gap-2 transition shadow-md"
+    >
+      {loading ? <Loader2 className="animate-spin w-5 h-5" /> : <Send />}
+      Send
+    </button>
+  </div>
+</div>
       </div>
     </div>
   );
