@@ -35,7 +35,7 @@ function App() {
         file.size > 2 * 1024 * 1024 ||
         (file.type !== "application/pdf" && file.type !== "text/plain")
       ) {
-        toast.error("File not supported. Upload a PDF or TXT file under 2MB.");
+        alert("File not supported. Upload a PDF or TXT file under 2MB.");
         setFile(null);
         return;
       }
@@ -115,13 +115,13 @@ function App() {
    ----------------------------- */
   return (
     <div className="App  min-h-screen bg-gradient-to-r from-indigo-200 via-hazelblue to-blue-300 p-8">
-      <div className="bg-gradient-to-r from-indigo-300 via-purple-200 to-blue-300 p-3 rounded-3xl shadow-lg text-center space-y-4">
+      <div className="mx-17 bg-gradient-to-r from-indigo-300 via-purple-200 to-blue-300 p-3 rounded-3xl shadow-lg text-center space-y-4">
         <h2 className="text-3xl font-bold text-gray-800">AI Document Assistant</h2>
         <h3 className="text-xl text-gray-700 max-w-xl mx-auto">
           Upload your document and get instant AI-powered insights
         </h3>
       </div>
-      <div className="mt-15 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="mt-7 max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left Column */}
         <div className="space-y-6">
           {/* Upload Card */}
@@ -147,7 +147,7 @@ function App() {
           </div>
 
           {/* Summary Card */}
-          <div className="bg-white p-8 rounded-2xl shadow-xl border border-gray-200">
+          <div className="bg-white p-5 rounded-2xl shadow-xl border border-gray-200">
             <h2 className="text-lg font-semibold text-gray-700 mb-4">
               Document Summary
             </h2>
